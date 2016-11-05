@@ -1,0 +1,31 @@
+# Reddit Configuration
+# backlog_seconds: number of seconds before a submission is considered removable
+[reddit]
+username = reddit_username
+password = reddit_password
+subreddit = reddit_subreddit
+backlog_seconds = 200
+refresh_seconds = 60
+link_flairs = ["link_flair0", "link_flair1", "link_flair2"]
+
+# Logging Configuration
+[loggers]
+keys=root
+
+[handlers]
+keys=roothand
+
+[formatters]
+keys=rootform
+
+[logger_root]
+level=INFO
+handlers=roothand
+
+[handler_roothand]
+class=StreamHandler
+formatter=rootform
+args=(sys.stdout,)
+
+[formatter_rootform]
+format=%(message)s
