@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import praw
 from ConfigParser import SafeConfigParser
 import json
+from jinja2 import Environment, PackageLoader
 
 
 class WEEKDAY(object):
@@ -26,6 +27,19 @@ class Statistics(object):
         logging.info("all_posts: {0}".format(self.all_posts))
         logging.info("ignored_posts: {0}".format(self.ignored_posts))
         logging.info("removed_posts: {0}".format(self.removed_posts))
+
+
+class Views(object):
+    def __init__(self, path):
+        super(Views, self).__init__()
+        self.templates = {}
+        self.env = Environment(loader=PackageLoader('pgo', path))
+
+    def render(self, template, *args, **kwargs):
+        if not template in self.templates:
+            self.templates[template] = self.env.get_template('{0}.tpl'.format(template))
+
+        return self.templates[template].render(**kwargs)
 
 
 class PGO(object):
@@ -48,8 +62,9 @@ class PGO(object):
     def _setup(self):
         logging.config.fileConfig(self.config_file)
         self.stats = Statistics()
-        self.r = praw.Reddit(user_agent="ghs/2.0")
+        self.r = praw.Reddit(user_agent="pgo/1.0")
         self.cfg = self._load_config()
+        self.views = Views("templates")
 
     def _reddit_login(self):
         while True:
@@ -61,16 +76,20 @@ class PGO(object):
                 logging.error('ERROR: {0}'.format(e))
 
     def _check_conditions(self, submission, link_flairs):
-        # if datetime.today().weekday() not in [WEEKDAY.SATURDAY, WEEKDAY.SUNDAY]:
-        if not submission.approved_by:
-            if submission.link_flair_text and submission.link_flair_text.lower() in link_flairs:
-                return True
+        if datetime.today().weekday() not in [WEEKDAY.SATURDAY, WEEKDAY.SUNDAY]:
+            if not submission.approved_by and not submission.banned_by:
+                if submission.link_flair_text and submission.link_flair_text.lower() in link_flairs:
+                    return True
         return False
 
     def _remove_submission(self, submission):
-        pass
+        submission.remove(False)
+        comment = self.views.render("screenshots")
+        response = submission.add_comment(comment)
+        response.distinguish()
 
     def _process_submissions(self):
+        logging.info(u'Serving at /r/{0}'.format(self.cfg.get('reddit', 'subreddit')))
         last_update = datetime.utcnow() - timedelta(hours=24)
         backlog_seconds = int(self.cfg.get('reddit', 'backlog_seconds'))
         refresh_seconds = int(self.cfg.get('reddit', 'refresh_seconds'))
@@ -123,6 +142,7 @@ class PGO(object):
                 logging.error('ERROR: {0}'.format(e))
 
     def serve(self):
+        logging.info("Starting")
         self._setup()
         self._reddit_login()
         self._process_submissions()
