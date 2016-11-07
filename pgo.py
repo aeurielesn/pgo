@@ -76,7 +76,7 @@ class PGO(object):
                 logging.error('ERROR: {0}'.format(e))
 
     def _check_conditions(self, submission, link_flairs):
-        if datetime.today().weekday() not in [WEEKDAY.SATURDAY, WEEKDAY.SUNDAY]:
+        if datetime.utcfromtimestamp(submission.created_utc).weekday() not in [WEEKDAY.SATURDAY, WEEKDAY.SUNDAY]:
             if not submission.approved_by and not submission.banned_by:
                 if submission.link_flair_text and submission.link_flair_text.lower() in link_flairs:
                     return True
