@@ -17,16 +17,16 @@ class WEEKDAY(object):
 class Statistics(object):
     def __init__(self):
         super(Statistics, self).__init__()
-        self.untagged_posts = 0
         self.all_posts = 0
         self.ignored_posts = 0
-        self.removed_posts = 0
+        self.removed_screenshots = 0
+        self.removed_untagged = 0
 
     def dump(self):
-        logging.info("untagged_posts: {0}".format(self.untagged_posts))
         logging.info("all_posts: {0}".format(self.all_posts))
         logging.info("ignored_posts: {0}".format(self.ignored_posts))
-        logging.info("removed_posts: {0}".format(self.removed_posts))
+        logging.info("removed_screenshots: {0}".format(self.removed_screenshots))
+        logging.info("removed_untagged: {0}".format(self.removed_untagged))
 
 
 class Views(object):
@@ -75,22 +75,34 @@ class PGO(object):
             except Exception as e:
                 logging.error('ERROR: {0}'.format(e))
 
-    def _check_conditions(self, submission, link_flairs):
+    def _check_removal_screenshot(self, submission, link_flairs):
         if datetime.utcfromtimestamp(submission.created_utc).weekday() not in [WEEKDAY.SATURDAY, WEEKDAY.SUNDAY]:
             if not submission.approved_by and not submission.banned_by:
                 if submission.link_flair_text and submission.link_flair_text.lower() in link_flairs:
                     return True
         return False
 
-    def _remove_submission(self, submission):
+    def _check_removal_untagged(self, submission):
+        if not submission.approved_by and not submission.banned_by:
+            if not submission.link_flair_text:
+                return True
+        return False
+
+    def _remove_submission(self, template, submission):
         submission.remove(False)
-        comment = self.views.render("screenshots")
+        comment = self.views.render(template)
         response = submission.add_comment(comment)
         response.distinguish()
 
+    def _remove_screenshot_submission(self, submission):
+        self._remove_submission("screenshot-removal", submission)
+
+    def _remove_untagged_submission(self, submission):
+        self._remove_submission("untagged-removal", submission)
+
     def _process_submissions(self):
         logging.info(u'Serving at /r/{0}'.format(self.cfg.get('reddit', 'subreddit')))
-        last_update = datetime.utcnow() - timedelta(hours=24)
+        last_update = datetime.utcnow() - timedelta(hours=1)
         backlog_seconds = int(self.cfg.get('reddit', 'backlog_seconds'))
         refresh_seconds = int(self.cfg.get('reddit', 'refresh_seconds'))
         link_flairs = json.loads(self.cfg.get('reddit', 'link_flairs'))
@@ -113,15 +125,16 @@ class PGO(object):
 
                     new_update = max(new_update, submission_time)
 
-                    if not submission.link_flair_text:
-                        self.stats.untagged_posts += 1
-
                     self.stats.all_posts += 1
 
-                    if self._check_conditions(submission, link_flairs):
+                    if self._check_removal_screenshot(submission, link_flairs):
                         logging.info(u"REMOVE: {0}".format(submission.title))
-                        self._remove_submission(submission)
-                        self.stats.removed_posts += 1
+                        self._remove_screenshot_submission(submission)
+                        self.stats.removed_screenshots += 1
+                    elif self._check_removal_untagged(submission):
+                        logging.info(u"REMOVE: {0}".format(submission.title))
+                        self._remove_untagged_submission(submission)
+                        self.stats.removed_untagged += 1
                     else:
                         logging.info(u"IGNORE: {0}".format(submission.title))
                         self.stats.ignored_posts += 1
