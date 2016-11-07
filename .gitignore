@@ -1,1 +1,4 @@
-pgo.cfg
+*.cfg
+*.log
+*.log.*
+*.pyc
